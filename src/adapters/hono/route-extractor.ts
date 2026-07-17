@@ -18,7 +18,7 @@ export function extractRoutes(project: Project): ValidationResult {
   for (const sourceFile of project.getSourceFiles()) {
     // Find all CallExpressions
     const callExpressions = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
-    
+
     for (const callExpr of callExpressions) {
       processCallExpression(callExpr, sourceFile, typeChecker, result);
     }
@@ -28,7 +28,7 @@ export function extractRoutes(project: Project): ValidationResult {
 }
 
 function processCallExpression(
-  callExpr: CallExpression, 
+  callExpr: CallExpression,
   sourceFile: SourceFile,
   typeChecker: TypeChecker,
   result: ValidationResult
@@ -93,23 +93,30 @@ function processCallExpression(
       // Find typed() calls in handler body
       const typedResponses = extractTypedResponse(handler, typeChecker);
       if (typedResponses.length > 0) {
-         route.responses.push(...typedResponses);
+        route.responses.push(...typedResponses);
       }
     } else if (Node.isCallExpression(handler)) {
       // Might be zValidator()
       const validator = extractValidator(handler, typeChecker);
       if (validator) {
-        if (validator.target === 'json') route.requestBody = validator.schema;
+        if (validator.target === 'json') {
+          route.requestBody = validator.schema;
+          route.requestBodyType = 'json';
+        }
+        else if (validator.target === 'form') {
+          route.requestBody = validator.schema;
+          route.requestBodyType = 'form';
+        }
         else if (validator.target === 'query') route.querySchema = validator.schema;
         else if (validator.target === 'header') route.headerSchema = validator.schema;
         // params are handled by extracting from path, but we can also use validator schema if provided
       }
     }
   }
-  
+
   if (hints.override) {
     // Merge override JSON
-    Object.assign(route, hints.override);
+    route.openapiOverride = hints.override;
   }
 
   result.resolved.push(route);

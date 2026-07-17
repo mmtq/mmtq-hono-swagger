@@ -86,9 +86,10 @@ export function assembleOpenAPI(
 
     // Request Body
     if (route.requestBody) {
+      const contentType = route.requestBodyType === 'form' ? 'multipart/form-data' : 'application/json';
       operation.requestBody = {
         content: {
-          'application/json': {
+          [contentType]: {
             schema: resolveSchema(route.requestBody, doc) as any
           }
         },
@@ -117,6 +118,10 @@ export function assembleOpenAPI(
     // Ensure at least one response
     if (Object.keys(operation.responses).length === 0) {
       operation.responses['200'] = { description: 'OK' };
+    }
+
+    if (route.openapiOverride) {
+      Object.assign(operation, route.openapiOverride);
     }
 
     pathItem[method] = operation;

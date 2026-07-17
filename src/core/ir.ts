@@ -11,11 +11,13 @@ export interface IRRoute {
   security?: any[];
   deprecated?: boolean;
   requestBody?: IRSchema;
+  requestBodyType?: 'json' | 'form';
   querySchema?: IRSchema;
   headerSchema?: IRSchema;
   responses: IRResponse[];
   sourceFile: string;
   sourceLine: number;
+  openapiOverride?: any;
 }
 
 export interface IRSchema {
