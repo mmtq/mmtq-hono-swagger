@@ -1,7 +1,15 @@
 {
   "name": "@mmtq/hono-swagger",
-  "version": "1.0.0-beta.0",
+  "version": "1.0.0-beta.1",
   "description": "Build-time OpenAPI generator for Hono + Zod",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mmtq/mmtq-hono-swagger.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mmtq/mmtq-hono-swagger/issues"
+  },
+  "homepage": "https://github.com/mmtq/mmtq-hono-swagger#readme",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
