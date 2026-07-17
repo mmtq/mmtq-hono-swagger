@@ -110,6 +110,40 @@ npx hono-swagger generate
 
 Now start your Hono app, navigate to `/docs`, and enjoy your fully typed OpenAPI documentation!
 
+### 5. Add Authentication (Optional)
+
+You can easily define global security schemes (like Bearer Tokens, API Keys, or Cookies) in your `openapi.config.ts`, and then protect specific routes using the `@security` JSDoc tag!
+
+**`openapi.config.ts`**
+```typescript
+export default {
+  // ...
+  securitySchemes: {
+    BearerAuth: {
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT'
+    },
+    CookieAuth: {
+      type: 'apiKey',
+      in: 'cookie',
+      name: 'session_id'
+    }
+  }
+};
+```
+
+**Protecting a Route:**
+```typescript
+/**
+ * @summary Fetch user profile
+ * @security [{"BearerAuth": []}]
+ */
+app.get('/profile', (c) => {
+  // ...
+});
+```
+
 ## CLI Reference
 
 `@mmtq/hono-swagger` comes with several handy CLI commands:

@@ -3,7 +3,7 @@ import type { IRRoute, IRSchema } from './ir';
 
 export function assembleOpenAPI(
   routes: IRRoute[],
-  config: { info: OpenAPIV3.InfoObject; servers?: OpenAPIV3.ServerObject[] }
+  config: { info: OpenAPIV3.InfoObject; servers?: OpenAPIV3.ServerObject[]; securitySchemes?: Record<string, any> }
 ): OpenAPIV3.Document {
   const doc: OpenAPIV3.Document = {
     openapi: '3.0.3',
@@ -16,6 +16,11 @@ export function assembleOpenAPI(
 
   if (config.servers && config.servers.length > 0) {
     doc.servers = config.servers;
+  }
+
+  if (config.securitySchemes) {
+    doc.components = doc.components || {};
+    doc.components.securitySchemes = config.securitySchemes as any;
   }
 
   for (const route of routes) {

@@ -14,6 +14,7 @@ export const ConfigSchema = z.object({
   formats: z.array(z.enum(['json', 'yaml'])).default(['json', 'yaml']),
   include: z.array(z.string()).default(['src/**/*.ts']),
   exclude: z.array(z.string()).default([]),
+  securitySchemes: z.record(z.string(), z.any()).optional(),
   responseWrappers: z.record(z.string(), z.string()).optional(),
   unresolvedThreshold: z.number().min(0).max(100).default(0)
 });
