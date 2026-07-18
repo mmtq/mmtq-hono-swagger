@@ -4,6 +4,12 @@ import { extractValidator } from './validator-extractor';
 import { extractTypedResponse } from './typed-extractor';
 import { extractJSDocHints } from '../../core/jsdoc-parser';
 
+export interface Mount {
+  prefix: string;
+  appId: string;
+  mountedAppId: string;
+}
+
 const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'];
 
 export function extractRoutes(project: Project): ValidationResult {
@@ -13,6 +19,7 @@ export function extractRoutes(project: Project): ValidationResult {
     unresolved: []
   };
 
+  const mounts: Mount[] = [];
   const typeChecker = project.getTypeChecker();
 
   for (const sourceFile of project.getSourceFiles()) {
@@ -20,10 +27,65 @@ export function extractRoutes(project: Project): ValidationResult {
     const callExpressions = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
 
     for (const callExpr of callExpressions) {
-      processCallExpression(callExpr, sourceFile, typeChecker, result);
+      processCallExpression(callExpr, sourceFile, typeChecker, result, mounts);
     }
   }
 
+  // Resolve mounts
+  const routeMap = new Map<string, IRRoute[]>();
+  for (const r of result.resolved) {
+     if (r.appId) {
+       if (!routeMap.has(r.appId)) routeMap.set(r.appId, []);
+       routeMap.get(r.appId)!.push(r);
+     }
+  }
+
+  let changed = true;
+  let iterations = 0;
+  while (changed && iterations < 10) {
+    changed = false;
+    iterations++;
+    for (const mount of mounts) {
+      const sourceRoutes = routeMap.get(mount.mountedAppId) || [];
+      const targetRoutes = routeMap.get(mount.appId) || [];
+      
+      for (const sr of sourceRoutes) {
+         let newPath = (mount.prefix + sr.path).replace(/\/+/g, '/');
+         if (newPath.endsWith('/') && newPath.length > 1) {
+            newPath = newPath.slice(0, -1);
+         }
+         const exists = targetRoutes.some(tr => tr.path === newPath && tr.method === sr.method && tr.sourceLine === sr.sourceLine);
+         if (!exists) {
+            const newRoute: IRRoute = {
+               ...sr,
+               path: normalizePath(newPath),
+               pathParams: extractPathParams(newPath),
+               appId: mount.appId
+            };
+            targetRoutes.push(newRoute);
+            changed = true;
+         }
+      }
+      if (changed) {
+         routeMap.set(mount.appId, targetRoutes);
+      }
+    }
+  }
+
+  const mountedAppIds = new Set(mounts.map(m => m.mountedAppId));
+  const finalRoutes: IRRoute[] = [];
+  
+  for (const [appId, routes] of routeMap.entries()) {
+     if (!mountedAppIds.has(appId)) {
+        finalRoutes.push(...routes);
+     }
+  }
+  
+  for (const r of result.resolved) {
+     if (!r.appId) finalRoutes.push(r);
+  }
+
+  result.resolved = finalRoutes;
   return result;
 }
 
@@ -31,19 +93,60 @@ function processCallExpression(
   callExpr: CallExpression,
   sourceFile: SourceFile,
   typeChecker: TypeChecker,
-  result: ValidationResult
+  result: ValidationResult,
+  mounts: Mount[]
 ) {
   const expr = callExpr.getExpression();
   if (!Node.isPropertyAccessExpression(expr)) return;
+
+  const appNode = expr.getExpression();
+  let appId = '';
+  if (Node.isIdentifier(appNode)) {
+    const sym = appNode.getSymbol() || typeChecker.getSymbolAtLocation(appNode);
+    if (sym) {
+       const decl = sym.getDeclarations()[0];
+       if (decl) {
+          appId = decl.getSourceFile().getFilePath() + '#' + decl.getStart();
+       }
+    }
+  }
 
   const methodName = expr.getName();
   if (!HTTP_METHODS.includes(methodName)) {
     // Check if it's app.route()
     if (methodName === 'route') {
-      // For v1, we can do simple path joining if we can trace the sub-router.
-      // But actually, tracing `.route(prefix, app)` statically across files requires following imports.
-      // We'll leave advanced route composition for v1.1 or flag it if dynamic.
-      // A full implementation would find the referenced app and prepend the prefix to its routes.
+      const args = callExpr.getArguments();
+      if (args.length >= 2) {
+         const prefixNode = args[0];
+         let prefix = '';
+         if (Node.isStringLiteral(prefixNode) || Node.isNoSubstitutionTemplateLiteral(prefixNode)) {
+           prefix = prefixNode.getLiteralText();
+         }
+         const subRouterNode = args[1];
+         let mountedAppId = '';
+         if (Node.isIdentifier(subRouterNode)) {
+            const sym = subRouterNode.getSymbol() || typeChecker.getSymbolAtLocation(subRouterNode);
+            if (sym) {
+               const actualSym = sym.getAliasedSymbol() || sym;
+               const decl = actualSym.getDeclarations()[0];
+               if (decl) {
+                  mountedAppId = decl.getSourceFile().getFilePath() + '#' + decl.getStart();
+               }
+            }
+         }
+         
+         if (prefix && appId && mountedAppId) {
+            mounts.push({ prefix, appId, mountedAppId });
+         } else if (prefix && appId && !mountedAppId) {
+            result.unresolved.push({
+              method: 'route',
+              path: prefix,
+              sourceFile: sourceFile.getFilePath(),
+              sourceLine: callExpr.getStartLineNumber(),
+              reason: 'Dynamic sub-router mounting is not statically traceable'
+            });
+         }
+      }
     }
     return;
   }
@@ -56,7 +159,52 @@ function processCallExpression(
 
   if (Node.isStringLiteral(pathNode) || Node.isNoSubstitutionTemplateLiteral(pathNode)) {
     path = pathNode.getLiteralText();
-  } else {
+  } else if (Node.isIdentifier(pathNode)) {
+    const symbol = pathNode.getSymbol() || typeChecker.getSymbolAtLocation(pathNode);
+    if (symbol) {
+      const decl = symbol.getDeclarations()[0];
+      if (decl && Node.isVariableDeclaration(decl)) {
+        const init = decl.getInitializer();
+        if (init && (Node.isStringLiteral(init) || Node.isNoSubstitutionTemplateLiteral(init))) {
+          path = init.getLiteralText();
+        }
+      }
+    }
+  } else if (Node.isTemplateExpression(pathNode)) {
+     const head = pathNode.getHead().getLiteralText();
+     let resolvedPath = head;
+     let canResolve = true;
+     for (const span of pathNode.getTemplateSpans()) {
+       const spanExpr = span.getExpression();
+       let spanVal = '';
+       if (Node.isIdentifier(spanExpr)) {
+          const symbol = spanExpr.getSymbol() || typeChecker.getSymbolAtLocation(spanExpr);
+          if (symbol) {
+            const decl = symbol.getDeclarations()[0];
+            if (decl && Node.isVariableDeclaration(decl)) {
+               const init = decl.getInitializer();
+               if (init && (Node.isStringLiteral(init) || Node.isNoSubstitutionTemplateLiteral(init))) {
+                  spanVal = init.getLiteralText();
+               } else {
+                  canResolve = false; break;
+               }
+            } else {
+               canResolve = false; break;
+            }
+          } else {
+             canResolve = false; break;
+          }
+       } else {
+          canResolve = false; break;
+       }
+       resolvedPath += spanVal + span.getLiteral().getLiteralText();
+     }
+     if (canResolve) {
+        path = resolvedPath;
+     }
+  }
+
+  if (!path) {
     // Dynamic path
     result.unresolved.push({
       method: methodName,
@@ -73,6 +221,7 @@ function processCallExpression(
   if (hints.ignore) return;
 
   const route: IRRoute = {
+    appId,
     method: methodName,
     path: normalizePath(path),
     pathParams: extractPathParams(path),
@@ -128,6 +277,14 @@ function normalizePath(p: string): string {
 }
 
 function extractPathParams(p: string): string[] {
-  const matches = p.match(/:([a-zA-Z0-9_]+)/g);
-  return matches ? matches.map(m => m.slice(1)) : [];
+  const matches = p.match(/:([a-zA-Z0-9_]+)/g) || [];
+  const matchesBraces = p.match(/{([a-zA-Z0-9_]+)}/g) || [];
+  
+  const params = [
+    ...matches.map(m => m.slice(1)),
+    ...matchesBraces.map(m => m.slice(1, -1))
+  ];
+  
+  // Remove duplicates just in case
+  return Array.from(new Set(params));
 }

@@ -1,6 +1,7 @@
 import type { OpenAPIV3 } from 'openapi-types';
 
 export interface IRRoute {
+  appId?: string;
   method: string;
   path: string;
   pathParams: string[];

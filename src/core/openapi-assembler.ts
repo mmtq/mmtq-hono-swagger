@@ -52,32 +52,31 @@ export function assembleOpenAPI(
       }
     }
 
-    if (route.querySchema) {
-      const schema = resolveSchema(route.querySchema, doc) as OpenAPIV3.SchemaObject;
-      if (schema && typeof schema === 'object' && schema.properties) {
-        for (const [name, propSchema] of Object.entries(schema.properties as any)) {
+    const appendParameters = (irSchema: IRSchema, inLocation: 'query' | 'header') => {
+      const schema = resolveSchema(irSchema, doc) as any;
+      let actualSchema = schema;
+      if (schema.$ref) {
+         const name = schema.$ref.split('/').pop()!;
+         actualSchema = doc.components!.schemas![name];
+      }
+      if (actualSchema && typeof actualSchema === 'object' && actualSchema.properties) {
+        for (const [name, propSchema] of Object.entries(actualSchema.properties as any)) {
           parameters.push({
             name,
-            in: 'query',
+            in: inLocation,
             schema: propSchema as any,
-            required: schema.required?.includes(name) || false
+            required: actualSchema.required?.includes(name) || false
           });
         }
       }
+    };
+
+    if (route.querySchema) {
+      appendParameters(route.querySchema, 'query');
     }
 
     if (route.headerSchema) {
-      const schema = resolveSchema(route.headerSchema, doc) as OpenAPIV3.SchemaObject;
-      if (schema && typeof schema === 'object' && schema.properties) {
-        for (const [name, propSchema] of Object.entries(schema.properties as any)) {
-          parameters.push({
-            name,
-            in: 'header',
-            schema: propSchema as any,
-            required: schema.required?.includes(name) || false
-          });
-        }
-      }
+      appendParameters(route.headerSchema, 'header');
     }
 
     if (parameters.length > 0) {
@@ -120,6 +119,42 @@ export function assembleOpenAPI(
       operation.responses['200'] = { description: 'OK' };
     }
 
+    // Auto-document 400 Bad Request for validation errors
+    if (route.requestBody || route.querySchema || route.headerSchema) {
+       if (!operation.responses['400']) {
+          operation.responses['400'] = {
+             description: 'Bad Request (Validation Error)',
+             content: {
+                'application/json': {
+                   schema: {
+                      type: 'object',
+                      properties: {
+                         success: { type: 'boolean', enum: [false] },
+                         error: {
+                            type: 'object',
+                            properties: {
+                               issues: {
+                                  type: 'array',
+                                  items: {
+                                     type: 'object',
+                                     properties: {
+                                        code: { type: 'string' },
+                                        message: { type: 'string' },
+                                        path: { type: 'array', items: { type: 'string' } }
+                                     }
+                                  }
+                               },
+                               name: { type: 'string', enum: ['ZodError'] }
+                            }
+                         }
+                      }
+                   }
+                }
+             }
+          };
+       }
+    }
+
     if (route.openapiOverride) {
       Object.assign(operation, route.openapiOverride);
     }
@@ -136,12 +171,24 @@ function resolveSchema(irSchema: IRSchema, doc: OpenAPIV3.Document): OpenAPIV3.R
     return irSchema.jsonSchema as OpenAPIV3.SchemaObject;
   }
 
-  // Named schema - add to components
-  if (!doc.components!.schemas![irSchema.name]) {
-    doc.components!.schemas![irSchema.name] = irSchema.jsonSchema as OpenAPIV3.SchemaObject;
+  const baseName = irSchema.name;
+  let finalName = baseName;
+  let counter = 2;
+  
+  while (doc.components!.schemas![finalName]) {
+     const existingSchema = doc.components!.schemas![finalName];
+     if (JSON.stringify(existingSchema) === JSON.stringify(irSchema.jsonSchema)) {
+        break; // Identical schemas can share the same reference
+     }
+     finalName = `${baseName}_${counter}`;
+     counter++;
+  }
+
+  if (!doc.components!.schemas![finalName]) {
+    doc.components!.schemas![finalName] = irSchema.jsonSchema as OpenAPIV3.SchemaObject;
   }
 
   return {
-    $ref: `#/components/schemas/${irSchema.name}`
+    $ref: `#/components/schemas/${finalName}`
   };
 }

@@ -16,10 +16,22 @@ export function extractTypedResponse(handlerNode: Node, typeChecker: TypeChecker
       if (args.length >= 3) {
         const schemaArg = args[1];
         let statusArg = args[3];
-        
         let statusCode: string | number = 200;
-        if (statusArg && (Node.isNumericLiteral(statusArg) || Node.isStringLiteral(statusArg))) {
-          statusCode = statusArg.getLiteralValue();
+        if (statusArg) {
+          if (Node.isNumericLiteral(statusArg) || Node.isStringLiteral(statusArg)) {
+            statusCode = statusArg.getLiteralValue();
+          } else if (Node.isIdentifier(statusArg)) {
+            const sym = statusArg.getSymbol() || typeChecker.getSymbolAtLocation(statusArg);
+            if (sym) {
+              const decl = sym.getDeclarations()[0];
+              if (decl && Node.isVariableDeclaration(decl)) {
+                const init = decl.getInitializer();
+                if (init && (Node.isNumericLiteral(init) || Node.isStringLiteral(init))) {
+                  statusCode = init.getLiteralValue();
+                }
+              }
+            }
+          }
         }
 
         const isAnonymous = !Node.isIdentifier(schemaArg);

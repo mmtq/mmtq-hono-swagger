@@ -10,6 +10,15 @@
     "url": "https://github.com/mmtq/mmtq-hono-swagger/issues"
   },
   "homepage": "https://github.com/mmtq/mmtq-hono-swagger#readme",
+  "keywords": [
+    "hono",
+    "swagger",
+    "openapi",
+    "zod",
+    "generator",
+    "build-time",
+    "cli"
+  ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

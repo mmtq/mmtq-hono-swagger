@@ -155,12 +155,70 @@ export function extractZodSchema(node: Node, typeChecker: TypeChecker): any {
           return { type: 'object', properties: remainingProps, required: baseSchema.required?.filter((r: string) => !omitted.includes(r)) };
         }
       }
+      
+      if (propName === 'email') return { ...baseSchema, format: 'email' };
+      if (propName === 'url') return { ...baseSchema, format: 'uri' };
+      if (propName === 'uuid') return { ...baseSchema, format: 'uuid' };
+      if (propName === 'min' || propName === 'max' || propName === 'length') {
+        const args = node.getArguments();
+        if (args.length > 0) {
+           const val = Number(args[0].getText());
+           if (!isNaN(val)) {
+             if (baseSchema.type === 'string') {
+                if (propName === 'min') return { ...baseSchema, minLength: val };
+                if (propName === 'max') return { ...baseSchema, maxLength: val };
+                if (propName === 'length') return { ...baseSchema, minLength: val, maxLength: val };
+             } else if (baseSchema.type === 'number') {
+                if (propName === 'min') return { ...baseSchema, minimum: val };
+                if (propName === 'max') return { ...baseSchema, maximum: val };
+             } else if (baseSchema.type === 'array') {
+                if (propName === 'min') return { ...baseSchema, minItems: val };
+                if (propName === 'max') return { ...baseSchema, maxItems: val };
+                if (propName === 'length') return { ...baseSchema, minItems: val, maxItems: val };
+             }
+           }
+        }
+      }
+      if (propName === 'default') {
+         const args = node.getArguments();
+         if (args.length > 0) {
+            let valText = args[0].getText();
+            let val: any = valText;
+            if (valText.startsWith("'") || valText.startsWith('"')) val = valText.slice(1, -1);
+            else if (valText === 'true') val = true;
+            else if (valText === 'false') val = false;
+            else if (!isNaN(Number(valText))) val = Number(valText);
+            return { ...baseSchema, default: val };
+         }
+      }
+      if (propName === 'describe') {
+         const args = node.getArguments();
+         if (args.length > 0) {
+            let valText = args[0].getText();
+            if (valText.startsWith("'") || valText.startsWith('"')) {
+              return { ...baseSchema, description: valText.slice(1, -1) };
+            }
+         }
+      }
+      
+      if (propName === 'regex') {
+         const args = node.getArguments();
+         if (args.length > 0) {
+            let valText = args[0].getText();
+            if (valText.startsWith('/') && valText.lastIndexOf('/') > 0) {
+               const lastSlash = valText.lastIndexOf('/');
+               const pattern = valText.substring(1, lastSlash);
+               return { ...baseSchema, pattern };
+            }
+         }
+      }
+
       return baseSchema; // Ignore unknown chained methods for now
     }
   }
 
   // Fallback
-  return { type: 'object' };
+  return {};
 }
 
 function isZodMethod(node: Node, methodName: string): boolean {

@@ -22,7 +22,7 @@ export function extractValidator(callExpr: CallExpression, typeChecker: TypeChec
 
       if (!target) return undefined;
 
-      const isAnonymous = !Node.isIdentifier(schemaArg);
+      const isAnonymous = !(Node.isIdentifier(schemaArg) || Node.isPropertyAccessExpression(schemaArg));
       let name: string | undefined;
 
       if (Node.isIdentifier(schemaArg)) {
