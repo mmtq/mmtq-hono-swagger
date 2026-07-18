@@ -1,6 +1,6 @@
 {
   "name": "@mmtq/hono-swagger",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Build-time OpenAPI generator for Hono + Zod",
   "repository": {
     "type": "git",
