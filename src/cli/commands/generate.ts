@@ -13,14 +13,11 @@ export async function generateAction() {
   console.log('Parsing project files...');
   const project = new Project();
   
-  config.include.forEach(pattern => {
-    project.addSourceFilesAtPaths(pattern);
-  });
-  
-  config.exclude.forEach(pattern => {
-    // ts-morph doesn't have a direct exclude pattern when adding, so we can filter manually if needed.
-    // For now, assume include handles it or glob exclude isn't strictly necessary for a v1 prototype.
-  });
+  const allPatterns = [
+    ...config.include,
+    ...config.exclude.map(pattern => pattern.startsWith('!') ? pattern : `!${pattern}`)
+  ];
+  project.addSourceFilesAtPaths(allPatterns);
 
   console.log('Scanning Hono routes...');
   const validationResult = runScanner(project);
@@ -41,8 +38,9 @@ export async function generateAction() {
     writeYaml(doc, config.outputDir);
   }
   
-  // Always write static swagger UI for v1
-  writeSwaggerUi(config.outputDir);
+  if (config.swaggerUi) {
+    writeSwaggerUi(config.outputDir);
+  }
   
   console.log('Done!');
 }

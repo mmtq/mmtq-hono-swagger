@@ -9,15 +9,12 @@ export async function loadConfig(cwd: string = process.cwd()): Promise<Config> {
   let rawConfig: any;
 
   if (fs.existsSync(tsConfigPath)) {
-    // Basic dynamic import for ts using ts-node or similar in a real environment
-    // For this prototype, we assume it's pre-compiled or we can require it
-    // Actually, Node >= 20 might support it with loaders, or we can use tsx.
-    // To keep zero-runtime-dependencies, we will require the user to use tsx, or we use a simple require hook.
-    // For v1, we will just try to import the JS or rely on a wrapper.
     try {
-      rawConfig = require(tsConfigPath).default || require(tsConfigPath);
+      const jiti = require('jiti')(__filename);
+      const mod = jiti(tsConfigPath);
+      rawConfig = mod.default || mod;
     } catch (e) {
-      console.warn(`Failed to load openapi.config.ts directly. Make sure you are using a runner like tsx: ${e}`);
+      console.warn(`Failed to load openapi.config.ts natively using jiti: ${e}`);
     }
   } else if (fs.existsSync(jsConfigPath)) {
     rawConfig = require(jsConfigPath);

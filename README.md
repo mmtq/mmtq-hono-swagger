@@ -36,10 +36,14 @@ export default {
     { url: 'http://localhost:3000', description: 'Local Server' }
   ],
   include: ['src/**/*.ts'], // Where your Hono routes live
+  exclude: ['src/**/*.spec.ts'], // Files to ignore during scanning
   outputDir: 'docs', // Where the generated openapi.json and static UI will be saved
-  formats: ['json']
+  formats: ['json'],
+  swaggerUi: true // Set to false to disable generating static Swagger UI HTML
 };
 ```
+
+*(Note: The CLI natively loads `.ts` configuration files out of the box using `jiti`, no need to compile it to JS or run via `tsx`!)*
 
 ### 2. Write Your Routes
 

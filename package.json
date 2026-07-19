@@ -52,7 +52,8 @@
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.3",
     "ts-morph": "^22.0.0",
-    "typescript": "^5.5.3"
+    "typescript": "^5.5.3",
+    "jiti": "^1.21.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

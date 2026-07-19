@@ -16,7 +16,8 @@ export const ConfigSchema = z.object({
   exclude: z.array(z.string()).default([]),
   securitySchemes: z.record(z.string(), z.any()).optional(),
   responseWrappers: z.record(z.string(), z.string()).optional(),
-  unresolvedThreshold: z.number().min(0).max(100).default(0)
+  unresolvedThreshold: z.number().min(0).max(100).default(0),
+  swaggerUi: z.boolean().default(true)
 });
 
 export type Config = z.output<typeof ConfigSchema>;
