@@ -23,12 +23,11 @@ export function extractRoutes(project: Project): ValidationResult {
   const typeChecker = project.getTypeChecker();
 
   for (const sourceFile of project.getSourceFiles()) {
-    // Find all CallExpressions
-    const callExpressions = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
-
-    for (const callExpr of callExpressions) {
-      processCallExpression(callExpr, sourceFile, typeChecker, result, mounts);
-    }
+    sourceFile.forEachDescendant(node => {
+      if (Node.isCallExpression(node)) {
+        processCallExpression(node, sourceFile, typeChecker, result, mounts);
+      }
+    });
   }
 
   // Resolve mounts
@@ -54,7 +53,7 @@ export function extractRoutes(project: Project): ValidationResult {
          if (newPath.endsWith('/') && newPath.length > 1) {
             newPath = newPath.slice(0, -1);
          }
-         const exists = targetRoutes.some(tr => tr.path === newPath && tr.method === sr.method && tr.sourceLine === sr.sourceLine);
+         const exists = targetRoutes.some(tr => tr.path === newPath && tr.method === sr.method && tr.sourceFile === sr.sourceFile && tr.sourceLine === sr.sourceLine);
          if (!exists) {
             const newRoute: IRRoute = {
                ...sr,
@@ -66,9 +65,8 @@ export function extractRoutes(project: Project): ValidationResult {
             changed = true;
          }
       }
-      if (changed) {
-         routeMap.set(mount.appId, targetRoutes);
-      }
+      // Target routes are modified in place, so re-setting isn't strictly necessary, but we'll do it cleanly.
+      routeMap.set(mount.appId, targetRoutes);
     }
   }
 
@@ -104,7 +102,8 @@ function processCallExpression(
   if (Node.isIdentifier(appNode)) {
     const sym = appNode.getSymbol() || typeChecker.getSymbolAtLocation(appNode);
     if (sym) {
-       const decl = sym.getDeclarations()[0];
+       const actualSym = sym.getAliasedSymbol() || sym;
+       const decl = actualSym.getDeclarations()[0];
        if (decl) {
           appId = decl.getSourceFile().getFilePath() + '#' + decl.getStart();
        }
